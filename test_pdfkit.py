@@ -1,4 +1,5 @@
 """Small fictional fixture tests. No real documents or all-feature guarantee."""
+from unittest import mock
 import contextlib
 import io
 import json
@@ -212,6 +213,82 @@ class PdfKitTests(unittest.TestCase):
         self.assertEqual(self.run_tool('--help').returncode, 0)
         self.assertNotEqual(self.run_tool('wrong').returncode, 0)
         self.assertNotEqual(self.run_tool().returncode, 0)
+
+
+class PathSafety(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.base=Path(self.tmp.name);self.root=self.base/'tree';self.root.mkdir()
+        self.file=self.root/'zero';self.file.write_bytes(b'')
+    def link(self,path,target,directory=False):
+        try:path.symlink_to(target,target_is_directory=directory)
+        except OSError:self.skipTest('Symlinks unavailable')
+    def code(self,path):
+        with contextlib.redirect_stderr(io.StringIO()):
+            return pdfkit.main(['count',str(path)])
+    def test_root_alias_refuses(self):
+        p=self.base/'alias';self.link(p,self.root,True);self.assertEqual(self.code(p),1)
+    def test_ancestor_alias_refuses(self):
+        p=self.base/'alias';self.link(p,self.base,True);self.assertEqual(self.code(p/'tree'),1)
+    def test_file_alias_refuses(self):
+        p=self.base/'linked';self.link(p,self.file);self.assertEqual(self.code(p),1)
+    def test_file_hardlink_refuses(self):
+        p=self.base/'hard';os.link(self.file,p);self.assertEqual(self.code(p),1)
+    def test_file_pipe_refuses(self):
+        if not hasattr(os,'mkfifo'):self.skipTest('Unix pipe unavailable')
+        p=self.base/'pipe';os.mkfifo(p);self.assertEqual(self.code(p),1)
+    def test_file_self_loop_refuses(self):
+        p=self.base/'loop';self.link(p,p);self.assertEqual(self.code(p),1)
+    def test_file_dangling_refuses(self):
+        p=self.base/'alias';self.link(p,self.base/'missing');self.assertEqual(self.code(p),1)
+    def test_file_traversal_refuses(self):self.assertEqual(self.code(self.root/'..'/'tree'/'zero'),1)
+    def test_file_ancestor_refuses(self):
+        p=self.base/'alias';self.link(p,self.root,True);self.assertEqual(self.code(p/'zero'),1)
+    def test_metadata_error_refuses(self):
+        with mock.patch.object(Path,'lstat',side_effect=OSError('forced')):self.assertEqual(self.code(self.file),1)
+    def test_reparse_attribute_refuses(self):
+        real=Path.lstat
+        def fake(p,*a,**kw):
+            value=real(p,*a,**kw)
+            if p==self.file:return type('Reparse',(),{'st_mode':value.st_mode,'st_file_attributes':0x400})()
+            return value
+        with mock.patch.object(Path,'lstat',fake):self.assertEqual(self.code(self.file),1)
+
+
+    def test_read_error_stops(self):
+        with mock.patch.object(Path,'open',side_effect=OSError('forced')):
+            self.assertEqual(self.code(self.file),1)
+    def test_setup_alias_parent_refuses(self):
+        p=self.base/'alias';self.link(p,self.root,True)
+        with self.assertRaises(OSError):make_sample.setup(p/'new')
+        self.assertFalse((self.root/'new').exists())
+    def test_setup_traversal_refuses(self):
+        with self.assertRaises(OSError):make_sample.setup(self.root/'..'/'new')
+    def test_output_linked_parent_refuses(self):
+        p=self.base/'alias';self.link(p,self.root,True)
+        with self.assertRaises(OSError):pdfkit.safe_output(p/'new')
+        self.assertFalse((self.root/'new').exists())
+    def test_output_traversal_refuses(self):
+        with self.assertRaises(OSError):pdfkit.safe_output(self.root/'..'/'new')
+    def test_output_metadata_error_refuses(self):
+        with mock.patch.object(Path,'lstat',side_effect=OSError('forced')):
+            with self.assertRaises(OSError):pdfkit.safe_output(self.root/'new')
+
+
+    def test_fixture_digest_alias_refuses(self):
+        p=self.base/'linked';self.link(p,self.file)
+        with self.assertRaises(OSError):check38.digest(p)
+    def test_fixture_pages_alias_refuses(self):
+        p=self.base/'linked';self.link(p,self.file)
+        with mock.patch.object(check38,'PdfReader') as reader:
+            with self.assertRaises(OSError):check38.pages(p)
+            reader.assert_not_called()
+    def test_pdf_reader_error_reports_failure(self):
+        with mock.patch.object(pdfkit,'PdfReader',side_effect=OSError('forced')),contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(pdfkit.main(['count',str(self.file)]),1)
+    def test_fixture_cli_read_error_nonzero(self):
+        with mock.patch.object(Path,'lstat',side_effect=OSError('forced')),contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(check38.main(['verify']),2)
 
 
 if __name__ == '__main__':
