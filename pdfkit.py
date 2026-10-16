@@ -4,8 +4,8 @@ count FILE... | merge OUT IN... | split IN OUT FIRST-LAST |
 rotate IN OUT DEGREES [--page N]
 
 Outputs are created exclusively: every existing destination is refused,
-including an input path or a link. Inputs and their links are read, not
-rewritten. This copies pages, not the whole PDF document: signatures,
+including an input path or a link. Inputs must be ordinary singly linked files with ordinary ancestors.
+Links/reparse points, special files and traversal refuse before reading. This copies pages, not the whole PDF document: signatures,
 forms, outlines, metadata and other document features are not promised.
 Counts alone do not prove content or order. Inspect the saved result.
 PDFs are processed in memory. No network, upload or sandbox is provided.
@@ -14,14 +14,38 @@ A disk/write failure can leave a partial NEW output; it is not deleted.
 import argparse
 import io
 import sys
+import stat
 from pathlib import Path
 from pypdf import PdfReader, PdfWriter
 from pypdf.errors import PyPdfError
 
 
+def safe_input(value, directory=False):
+    path = Path(value).absolute()
+    if '..' in path.parts:
+        raise OSError('Parent-traversal paths are unsupported.')
+    for part in [*reversed(path.parents), path]:
+        info = part.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+            raise OSError('Links/reparse points are unsupported.')
+    info = path.lstat()
+    if directory:
+        if not stat.S_ISDIR(info.st_mode):
+            raise NotADirectoryError('Expected an ordinary directory.')
+    elif not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise OSError('Expected an ordinary singly linked file.')
+    return path
+
+def safe_output(value):
+    path = Path(value).absolute()
+    if '..' in path.parts:
+        raise OSError('Parent-traversal paths are unsupported.')
+    safe_input(path.parent, directory=True)
+    return Path(value)
+
+
 def reader(path):
-    if not Path(path).is_file():
-        raise ValueError('Input must be an existing regular file (links are followed).')
+    path = safe_input(path)
     pdf = PdfReader(path)
     if pdf.is_encrypted:
         raise ValueError('Encrypted PDFs are not supported by this lesson.')
@@ -29,6 +53,7 @@ def reader(path):
 
 
 def save_new(writer, path):
+    safe_output(path)
     # Check links themselves: Windows xb may follow a dangling symlink.
     # This check plus exclusive creation is not a hostile-race guarantee.
     try:
