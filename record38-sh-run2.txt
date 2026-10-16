@@ -1,0 +1,89 @@
+### CMD: python -c "import sys, pypdf; print(sys.version.split()[0]); print(pypdf.__version__)"
+3.12.3
+6.19.0
+### EXIT: 0
+
+### CMD: python make_sample.py
+Created three fictional labeled PDFs in a new sample folder (2, 3 and 1 pages).
+### EXIT: 0
+
+### CMD: python make_sample.py
+Stopped: sample already exists. Nothing was replaced or deleted.
+### EXIT: 1
+
+### CMD: python check38.py snapshot
+Saved source SHA256 digests in a new manifest; existing manifests are refused.
+### EXIT: 0
+
+### CMD: python pdfkit.py count sample/contract.pdf sample/invoice.pdf sample/notes.pdf
+sample/contract.pdf: 2 pages
+sample/invoice.pdf: 3 pages
+sample/notes.pdf: 1 page
+Total: 6 pages
+### EXIT: 0
+
+### CMD: python pdfkit.py merge sample/merged.pdf sample/contract.pdf sample/invoice.pdf sample/notes.pdf
+Wrote sample/merged.pdf with 6 pages.
+### EXIT: 0
+
+### CMD: python pdfkit.py split sample/merged.pdf sample/first.pdf 1-2
+Wrote sample/first.pdf with source pages 1-2.
+### EXIT: 0
+
+### CMD: python pdfkit.py rotate sample/notes.pdf sample/rotated.pdf 90
+Wrote sample/rotated.pdf; rotated all pages by 90 degrees.
+### EXIT: 0
+
+### CMD: python check38.py verify
+PASS: all source SHA256 digests unchanged; six fixture labels and their order match.
+PASS: merged page geometry/rotation match; split selects first two labels; notes rotation is 90 degrees.
+These checks do not prove visual appearance or document-feature preservation. Inspect the PDFs.
+### EXIT: 0
+
+### CMD: python pdfkit.py merge sample/merged.pdf sample/contract.pdf sample/invoice.pdf sample/notes.pdf
+Stopped: destination already exists. Nothing was replaced.
+### EXIT: 1
+
+### CMD: python check38.py verify
+PASS: all source SHA256 digests unchanged; six fixture labels and their order match.
+PASS: merged page geometry/rotation match; split selects first two labels; notes rotation is 90 degrees.
+These checks do not prove visual appearance or document-feature preservation. Inspect the PDFs.
+### EXIT: 0
+
+### CMD: python -m unittest -v
+test_bad_ranges_create_no_output (test_pdfkit.PdfKitTests.test_bad_ranges_create_no_output) ... ok
+test_bad_rotation_or_page_creates_no_output (test_pdfkit.PdfKitTests.test_bad_rotation_or_page_creates_no_output) ... ok
+test_count_reports_each_file_and_total (test_pdfkit.PdfKitTests.test_count_reports_each_file_and_total) ... ok
+test_encrypted_input_is_refused (test_pdfkit.PdfKitTests.test_encrypted_input_is_refused) ... ok
+test_existing_directory_is_refused_without_touching_child (test_pdfkit.PdfKitTests.test_existing_directory_is_refused_without_touching_child) ... ok
+test_existing_empty_output_is_refused (test_pdfkit.PdfKitTests.test_existing_empty_output_is_refused) ... ok
+test_existing_output_preserves_bytes_and_mtime_for_each_operation (test_pdfkit.PdfKitTests.test_existing_output_preserves_bytes_and_mtime_for_each_operation) ... ok
+test_fixture_checker_detects_reordered_merged_pages (test_pdfkit.PdfKitTests.test_fixture_checker_detects_reordered_merged_pages) ... ok
+test_fixture_success_then_source_digest_tamper_is_detected (test_pdfkit.PdfKitTests.test_fixture_success_then_source_digest_tamper_is_detected) ... ok
+test_help_and_unknown_command (test_pdfkit.PdfKitTests.test_help_and_unknown_command) ... ok
+test_input_bytes_and_mtime_unchanged_after_success (test_pdfkit.PdfKitTests.test_input_bytes_and_mtime_unchanged_after_success) ... ok
+test_input_hardlink_output_is_refused (test_pdfkit.PdfKitTests.test_input_hardlink_output_is_refused) ... ok
+test_manifest_dangling_link_refused (test_pdfkit.PdfKitTests.test_manifest_dangling_link_refused) ... ok
+test_manifest_existing_file_preserved (test_pdfkit.PdfKitTests.test_manifest_existing_file_preserved) ... ok
+test_merge_preserves_order_text_geometry_and_rotation (test_pdfkit.PdfKitTests.test_merge_preserves_order_text_geometry_and_rotation) ... ok
+test_missing_or_malformed_input_creates_no_output (test_pdfkit.PdfKitTests.test_missing_or_malformed_input_creates_no_output) ... ok
+test_named_pipe_input_is_rejected_without_blocking (test_pdfkit.PdfKitTests.test_named_pipe_input_is_rejected_without_blocking) ... ok
+test_output_equal_to_input_preserves_bytes_and_mtime (test_pdfkit.PdfKitTests.test_output_equal_to_input_preserves_bytes_and_mtime) ... ok
+test_relative_alias_of_input_is_refused (test_pdfkit.PdfKitTests.test_relative_alias_of_input_is_refused) ... ok
+test_rotate_all_preserves_text_geometry_and_changes_rotation (test_pdfkit.PdfKitTests.test_rotate_all_preserves_text_geometry_and_changes_rotation) ... ok
+test_rotate_only_selected_page (test_pdfkit.PdfKitTests.test_rotate_only_selected_page) ... ok
+test_serialization_failure_creates_no_destination (test_pdfkit.PdfKitTests.test_serialization_failure_creates_no_destination) ... ok
+test_setup_cli_refuses_repeat_without_changing_sample (test_pdfkit.PdfKitTests.test_setup_cli_refuses_repeat_without_changing_sample) ... ok
+test_setup_existing_and_dangling_directory_links_refused (test_pdfkit.PdfKitTests.test_setup_existing_and_dangling_directory_links_refused) ... ok
+test_setup_refuses_existing_file_and_preserves_mtime (test_pdfkit.PdfKitTests.test_setup_refuses_existing_file_and_preserves_mtime) ... ok
+test_setup_refuses_existing_folder_and_preserves_nested_data (test_pdfkit.PdfKitTests.test_setup_refuses_existing_folder_and_preserves_nested_data) ... ok
+test_setup_repeat_preserves_all_generated_files (test_pdfkit.PdfKitTests.test_setup_repeat_preserves_all_generated_files) ... ok
+test_split_selects_requested_labels (test_pdfkit.PdfKitTests.test_split_selects_requested_labels) ... ok
+test_split_single_page (test_pdfkit.PdfKitTests.test_split_single_page) ... ok
+test_symlink_and_dangling_symlink_output_are_refused (test_pdfkit.PdfKitTests.test_symlink_and_dangling_symlink_output_are_refused) ... ok
+
+----------------------------------------------------------------------
+Ran 30 tests in 6.499s
+
+OK
+### EXIT: 0
