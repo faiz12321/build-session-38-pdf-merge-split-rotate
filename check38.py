@@ -2,22 +2,49 @@
 import hashlib
 import json
 import sys
+import stat
 from pathlib import Path
 from pypdf import PdfReader
+from pypdf.errors import PyPdfError
+
+
+def safe_input(value, directory=False):
+    path = Path(value).absolute()
+    if '..' in path.parts:
+        raise OSError('Parent-traversal paths are unsupported.')
+    for part in [*reversed(path.parents), path]:
+        info = part.lstat()
+        if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+            raise OSError('Links/reparse points are unsupported.')
+    info = path.lstat()
+    if directory:
+        if not stat.S_ISDIR(info.st_mode):
+            raise NotADirectoryError('Expected an ordinary directory.')
+    elif not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise OSError('Expected an ordinary singly linked file.')
+    return path
+
+def safe_output(value):
+    path = Path(value).absolute()
+    if '..' in path.parts:
+        raise OSError('Parent-traversal paths are unsupported.')
+    safe_input(path.parent, directory=True)
+    return Path(value)
 
 
 def digest(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashlib.sha256(safe_input(path).read_bytes()).hexdigest()
 
 
 def pages(path):
     return [(p.extract_text().strip(), tuple(float(x) for x in p.mediabox), int(p.get('/Rotate', 0)) % 360)
-            for p in PdfReader(path).pages]
+            for p in PdfReader(safe_input(path)).pages]
 
 
 def verify(root):
+    root = safe_input(root, directory=True)
     sources = [root / (name + '.pdf') for name in ['contract', 'invoice', 'notes']]
-    before = json.loads((root / 'sources.sha256.json').read_text())
+    before = json.loads(safe_input(root / 'sources.sha256.json').read_text())
     assert before == {p.name: digest(p) for p in sources}, 'Source bytes changed'
     original = sum((pages(p) for p in sources), [])
     expected = ['FICTIONAL CONTRACT - PAGE 1', 'FICTIONAL CONTRACT - PAGE 2',
@@ -34,7 +61,8 @@ def verify(root):
 
 
 def snapshot(root):
-    manifest = root / 'sources.sha256.json'
+    root = safe_input(root, directory=True)
+    manifest = safe_output(root / 'sources.sha256.json')
     try:
         manifest.lstat()
     except FileNotFoundError:
@@ -47,11 +75,21 @@ def snapshot(root):
     print('Saved source SHA256 digests in a new manifest; existing manifests are refused.')
 
 
+def main(argv):
+    if argv not in (['snapshot'], ['verify']):
+        print('Usage: python check38.py snapshot|verify', file=sys.stderr)
+        return 2
+    try:
+        root = Path(__file__).absolute().parent / 'sample'
+        if argv == ['snapshot']:
+            snapshot(root)
+        else:
+            verify(root)
+    except (OSError, ValueError, AssertionError, PyPdfError) as error:
+        print('Stopped: ' + str(error), file=sys.stderr)
+        return 2
+    return 0
+
+
 if __name__ == '__main__':
-    root = Path(__file__).resolve().parent / 'sample'
-    if sys.argv[1:] == ['snapshot']:
-        snapshot(root)
-    elif sys.argv[1:] == ['verify']:
-        verify(root)
-    else:
-        raise SystemExit('Usage: python check38.py snapshot|verify')
+    sys.exit(main(sys.argv[1:]))
